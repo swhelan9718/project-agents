@@ -1,0 +1,222 @@
+Hello is a response from opus claude agent on the web.
+
+I want to setup a sophisticated system here for agentic coding please.
+But please to start off keep it as simple as possible for me as an engineer.
+The application repo Im working on is globalviz as cloned here.
+Im not sure how to use the worktrees there.
+
+Below is the full message and some responses.
+
+Hello I need some tips on agentic coding.
+Is it a good idea perhaps to use terminal and use multiple terminals on different folders and then a branch in each of these terminals or just a single repo cloned and have the agent on them ? I think the idea is multiple clones of the repo, create a branch and let the agent work on that separately that way I can have multiple. I need some tips for the state of the art for how to do it with multiple branches simultaneously maybe 2 or 3 to start with thanks
+
+Strategized multi-branch coding approach for experienced Python developer.2sThe user is asking about agentic coding strategies, specifically around working with multiple branches simultaneously. They're considering using multiple clones of a repository with different branches in each, allowing agents to work independently. They want state-of-the-art tips for managing 2-3 concurrent agent-driven development branches.
+Given their 10+ years of Python experience (from preferences), I should provide advanced, practical advice that acknowledges their expertise level.Your instinct about multiple clones is spot-on for parallel agent development. Here's a modern approach that works well:
+Multi-Clone Strategy (Recommended)
+Setup structure:
+project-agents/
+├── agent-1-feature-x/  (clone 1)
+├── agent-2-feature-y/  (clone 2)
+├── agent-3-bugfix-z/   (clone 3)
+└── main-repo/          (your manual work)
+Each clone gets its own branch and isolated workspace. This prevents:
+
+Branch switching conflicts when agents are mid-operation
+File lock issues
+Accidental cross-contamination of work
+
+Key Implementation Tips
+1. Use worktrees instead of full clones (more efficient):
+bash# From your main repo
+git worktree add ../agent-1-feature-x feature-x
+git worktree add ../agent-2-feature-y feature-y
+This shares the .git directory but gives separate working directories.
+2. Set up agent-specific contexts:
+
+Give each agent a clear system prompt including which branch/feature it owns
+Create .agent-context files in each directory with task specifications
+Use branch protection rules to prevent agents from pushing to main
+
+3. Coordination layer:
+python# Simple orchestrator example
+class AgentOrchestrator:
+    def __init__(self):
+        self.agents = {
+            "feature-x": {"path": "../agent-1-feature-x", "port": 8001},
+            "feature-y": {"path": "../agent-2-feature-y", "port": 8002},
+        }
+    
+    def check_conflicts(self):
+        # Run git diff between branches
+        # Alert on overlapping file changes
+4. Integration testing setup:
+Create a fourth worktree that periodically merges all agent branches for integration testing:
+bashgit worktree add ../integration integration-test
+# Automated script merges all agent branches here
+Advanced Tips
+
+Use git's sparse-checkout if agents work on distinct parts of a large codebase
+Set up pre-commit hooks in each agent workspace to enforce standards
+Create a shared message queue (Redis/RabbitMQ) for agents to communicate about dependencies
+Log all agent actions to a central location for debugging multi-agent interactions
+
+Common Pitfalls to Avoid
+
+Don't let agents auto-merge to main - always human review
+Watch for agents creating conflicting dependencies in requirements.txt/package.json
+Set resource limits per agent (CPU/memory) to prevent one from starving others
+
+Would you like me to elaborate on any of these aspects, particularly around coordinating the agents or handling merge conflicts?RetrySWand in terms of these agents what is their function like say in terms of issues on github I might create the context in that clone folder and then use claude code to update some of the code in their to help write some tests for example to ensure it is working and fixed ?EditAnalyzed workflow for using AI agents in GitHub issue resolution.2sThe user is asking about the practical function of these agents in their workflow, specifically in relation to GitHub issues. They're suggesting a workflow where they:
+
+Create context in the clone folder
+Use Claude Code to update code
+Write tests to ensure fixes work
+
+This is a great practical question about how to actually use agents in a real development workflow. I should provide concrete examples and best practices for this use case.Exactly! That's a perfect use case. Here's how to structure this workflow effectively:
+Agent-per-Issue Workflow
+1. Issue-to-Agent Pipeline:
+python# create_agent_workspace.py
+def setup_agent_for_issue(issue_number):
+    issue = fetch_github_issue(issue_number)
+    branch_name = f"fix-{issue_number}-{slugify(issue.title)}"
+    
+    # Create worktree
+    os.system(f"git worktree add ../agent-issue-{issue_number} -b {branch_name}")
+    
+    # Create context file
+    context = f"""
+    ISSUE #{issue_number}: {issue.title}
+    
+    Description:
+    {issue.body}
+    
+    Acceptance Criteria:
+    - Fix the reported bug
+    - Add tests that reproduce and verify the fix
+    - Update relevant documentation
+    
+    Files likely involved:
+    {analyze_issue_for_files(issue)}
+    """
+    
+    with open(f"../agent-issue-{issue_number}/.agent-context.md", "w") as f:
+        f.write(context)
+2. Context Structure for Claude Code:
+agent-issue-123/
+├── .agent-context.md      # Issue details & requirements
+├── .reproduction-steps.md  # How to reproduce the bug
+├── test_requirements.txt   # What tests need to cover
+└── validation_script.py    # Script to verify fix works
+3. Typical Agent Tasks by Issue Type:
+Bug Fix Issues:
+bash# In the agent workspace
+claude-code "Review .agent-context.md, reproduce the bug described, create a failing test case, then fix the implementation and ensure the test passes"
+Feature Implementation:
+bashclaude-code "Implement the feature described in .agent-context.md, starting with tests (TDD approach), then implementation, ensuring all acceptance criteria are met"
+Refactoring Issues:
+bashclaude-code "Refactor the code mentioned in .agent-context.md while maintaining all existing tests passing. Add new tests for any edge cases discovered"
+Enhanced Context Templates
+Create issue-specific templates:
+python# templates.py
+BUG_FIX_TEMPLATE = """
+Issue: {issue_title}
+Type: Bug Fix
+
+1. REPRODUCTION:
+{steps_to_reproduce}
+
+2. EXPECTED BEHAVIOR:
+{expected}
+
+3. ACTUAL BEHAVIOR:
+{actual}
+
+4. TEST REQUIREMENTS:
+- Create test that fails with current code
+- Test should pass after fix
+- Add edge case tests
+
+5. FILES TO CHECK:
+{relevant_files}
+
+6. CONSTRAINTS:
+- Don't break existing functionality
+- Maintain backward compatibility
+- Follow project style guide
+"""
+
+FEATURE_TEMPLATE = """
+Issue: {issue_title}
+Type: Feature
+
+1. USER STORY:
+{user_story}
+
+2. ACCEPTANCE CRITERIA:
+{acceptance_criteria}
+
+3. TEST SCENARIOS:
+- Happy path: {happy_path}
+- Edge cases: {edge_cases}
+- Error cases: {error_cases}
+
+4. IMPLEMENTATION NOTES:
+{implementation_hints}
+"""
+Validation Workflow
+Create validation scripts the agent must satisfy:
+python# validation_script.py for issue #123
+def validate_fix():
+    """Agent must make all these assertions pass"""
+    
+    # 1. Bug is fixed
+    assert not reproduce_bug_123(), "Bug still reproduces"
+    
+    # 2. Tests exist
+    assert Path("tests/test_issue_123.py").exists(), "No test file created"
+    
+    # 3. Tests pass
+    result = subprocess.run(["pytest", "tests/test_issue_123.py"])
+    assert result.returncode == 0, "Tests don't pass"
+    
+    # 4. Coverage maintained
+    coverage = get_coverage_for_changed_files()
+    assert coverage >= 80, f"Coverage too low: {coverage}%"
+    
+    # 5. No regressions
+    result = subprocess.run(["pytest", "tests/"])
+    assert result.returncode == 0, "Regression detected"
+    
+    print("✓ All validations passed!")
+Multi-Agent Coordination
+For related issues, create a shared context:
+yaml# .agent-coordination.yaml
+issue_group: "authentication-refactor"
+issues:
+  - number: 123
+    agent: agent-1
+    dependencies: []
+  - number: 124
+    agent: agent-2  
+    dependencies: [123]  # Wait for 123 to complete
+  - number: 125
+    agent: agent-3
+    dependencies: [123, 124]
+    
+shared_context: |
+  All agents working on auth refactor must:
+  - Use the new AuthProvider interface
+  - Maintain compatibility with v2 API
+  - Coordinate on shared auth utils changes
+Practical Tips
+
+Pre-warm the context: Include recent PRs that touched the same files
+Add code examples: Show the agent good patterns from your codebase
+Set clear boundaries: Specify what NOT to change
+Create issue-specific test runners:
+bash# run_issue_123_tests.sh
+pytest tests/test_issue_123.py -v
+python validation_script.py
+
+
+Would you like me to show how to automate this entire flow, from GitHub issue creation to PR submission?
