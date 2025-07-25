@@ -2,6 +2,26 @@
 
 # Agentic Code Setup Script for GlobalViz
 # This script automates the creation of agent worktrees with proper context
+#
+#
+# ./setup-agent.sh fix-stats-job-handle-ints fix sw/fix-stats-job-handle-ints --existing
+#
+#
+# # Fix the stats job issue
+# ./setup-agent.sh agent-stats-fix fix stats-job-handle-ints --issue 123
+
+# # New feature work  
+# ./setup-agent.sh agent-auth feature user-authentication
+
+# # Debug performance
+# ./setup-agent.sh agent-perf debug slow-queries
+
+# # Test new feature
+# ./setup-agent.sh agent-test test new-feature-test
+
+# # Fix bug
+# ./setup-agent.sh agent-fix fix login-bug --issue 123
+
 
 set -e
 
@@ -28,12 +48,14 @@ usage() {
     echo "  -i, --issue NUMBER     Link to GitHub issue number"
     echo "  -t, --template FILE    Use specific template file"
     echo "  -b, --base-branch NAME Use specific base branch (default: main)"
+    echo "  -e, --existing         Use existing branch from origin (don't create new)"
     echo ""
     echo "Examples:"
     echo "  $0 agent1 feature authentication"
     echo "  $0 agent2 fix login-bug --issue 123"
     echo "  $0 agent3 test playwright-coverage"
     echo "  $0 agent4 debug performance-issue"
+    echo "  $0 fix-stats-job-handle-ints fix sw/fix-stats-job-handle-ints --existing"
     exit 1
 }
 
@@ -226,6 +248,7 @@ shift 3
 ISSUE_NUMBER=""
 TEMPLATE=""
 BASE_BRANCH="main"
+USE_EXISTING=false
 
 # Parse options
 while [[ $# -gt 0 ]]; do
@@ -241,6 +264,10 @@ while [[ $# -gt 0 ]]; do
         -b|--base-branch)
             BASE_BRANCH="$2"
             shift 2
+            ;;
+        -e|--existing)
+            USE_EXISTING=true
+            shift
             ;;
         *)
             echo -e "${RED}Unknown option: $1${NC}"
@@ -268,11 +295,17 @@ if [ ! -d "$MAIN_REPO_DIR" ]; then
     exit 1
 fi
 
-# Create branch name
-if [ -n "$ISSUE_NUMBER" ]; then
-    BRANCH_NAME="$BRANCH_TYPE/issue-$ISSUE_NUMBER-$DESCRIPTION"
+# Create or use branch name
+if [ "$USE_EXISTING" = true ]; then
+    # When using existing branch, DESCRIPTION is the full branch name
+    BRANCH_NAME="$DESCRIPTION"
 else
-    BRANCH_NAME="$BRANCH_TYPE/$DESCRIPTION"
+    # Create new branch name
+    if [ -n "$ISSUE_NUMBER" ]; then
+        BRANCH_NAME="$BRANCH_TYPE/issue-$ISSUE_NUMBER-$DESCRIPTION"
+    else
+        BRANCH_NAME="$BRANCH_TYPE/$DESCRIPTION"
+    fi
 fi
 
 WORKSPACE_PATH="../$AGENT_NAME"
@@ -298,14 +331,63 @@ cd "$MAIN_REPO_DIR"
 # Fetch latest changes
 git fetch origin
 
-# Create worktree from specified base branch
-git worktree add "$WORKSPACE_PATH" -b "$BRANCH_NAME" "origin/$BASE_BRANCH"
+if [ "$USE_EXISTING" = true ]; then
+    # Check if branch exists on origin
+    if git ls-remote --heads origin "$BRANCH_NAME" | grep -q "$BRANCH_NAME"; then
+        echo -e "${GREEN}Using existing branch: origin/$BRANCH_NAME${NC}"
+        
+        # Check if local branch already exists
+        if git show-ref --verify --quiet "refs/heads/$BRANCH_NAME"; then
+            echo -e "${YELLOW}Local branch '$BRANCH_NAME' already exists, using it${NC}"
+            git worktree add "$WORKSPACE_PATH" "$BRANCH_NAME"
+        else
+            # Create a local branch that tracks the remote branch
+            git worktree add "$WORKSPACE_PATH" -b "$BRANCH_NAME" --track "origin/$BRANCH_NAME"
+        fi
+    else
+        echo -e "${RED}Error: Branch 'origin/$BRANCH_NAME' does not exist${NC}"
+        exit 1
+    fi
+else
+    # Create new branch from base branch
+    echo -e "${GREEN}Creating new branch: $BRANCH_NAME from origin/$BASE_BRANCH${NC}"
+    git worktree add "$WORKSPACE_PATH" -b "$BRANCH_NAME" "origin/$BASE_BRANCH"
+fi
 
 cd ..
 
 # Create context file
 echo -e "${GREEN}Creating context file...${NC}"
 create_context "$AGENT_NAME" "$AGENT_NAME" "$BRANCH_TYPE" "$DESCRIPTION" "$ISSUE_NUMBER" "$TEMPLATE"
+
+# Setup development environment
+echo -e "${GREEN}Setting up development environment...${NC}"
+cd "$AGENT_NAME"
+
+# Install Python dependencies with poetry
+if command -v poetry &> /dev/null; then
+    echo -e "${GREEN}Installing Python dependencies with poetry...${NC}"
+    poetry install
+else
+    echo -e "${YELLOW}Warning: poetry not found. Skipping Python dependency installation.${NC}"
+fi
+
+# Install Node dependencies and build webpack
+if [ -f "package.json" ]; then
+    if command -v npm &> /dev/null; then
+        echo -e "${GREEN}Installing Node dependencies...${NC}"
+        npm install
+        
+        echo -e "${GREEN}Building webpack assets...${NC}"
+        npm run build
+        
+        echo -e "${YELLOW}Note: You'll need to run 'npm run dev' in a separate terminal for hot-reloading during development${NC}"
+    else
+        echo -e "${YELLOW}Warning: npm not found. Skipping Node dependency installation.${NC}"
+    fi
+fi
+
+cd ..
 
 # Create a quick start script
 cat > "$AGENT_NAME/start-agent.sh" << 'EOF'
@@ -315,12 +397,33 @@ echo "Branch: $(git branch --show-current)"
 echo ""
 echo "Context file: .agent-context.md"
 echo ""
+
+# Check if npm run dev is needed
+if [ -f "package.json" ] && ! [ -f "webpack-stats.json" ]; then
+    echo -e "\033[1;33mWarning: webpack-stats.json not found!\033[0m"
+    echo "You need to run 'npm run dev' in a separate terminal to generate webpack assets."
+    echo ""
+    echo "In another terminal, run:"
+    echo "  cd $(pwd)"
+    echo "  npm run dev"
+    echo ""
+    echo "Or use tmux/screen to keep it running in the background."
+    echo ""
+fi
+
 echo "Useful commands:"
+echo "  poetry shell            - Activate Python virtual environment"
+echo "  python manage.py runserver - Start Django development server"
+echo "  npm run dev             - Start webpack dev server (run in separate terminal)"
+echo "  npm run build           - Build webpack assets for production"
+echo ""
 echo "  git status              - Check current status"
 echo "  git add -A              - Stage all changes"
 echo "  git commit -m 'msg'     - Commit changes"
 echo "  git push -u origin HEAD - Push to remote"
-echo "  pytest tests/           - Run tests"
+echo ""
+echo "  pytest tests/           - Run Python tests"
+echo "  npm test                - Run JavaScript tests"
 echo ""
 echo "Starting Claude Code..."
 claude-code
@@ -342,3 +445,7 @@ echo ""
 echo "Or manually:"
 echo "  cd $AGENT_NAME"
 echo "  claude-code"
+echo ""
+if [ -f "$AGENT_NAME/package.json" ]; then
+    echo -e "${YELLOW}Remember: Run 'npm run dev' in a separate terminal for webpack hot-reloading${NC}"
+fi
