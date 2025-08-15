@@ -247,7 +247,7 @@ shift 3
 # Default values
 ISSUE_NUMBER=""
 TEMPLATE=""
-BASE_BRANCH="main"
+BASE_BRANCH="development"
 USE_EXISTING=false
 
 # Parse options
@@ -317,7 +317,8 @@ if [ -d "$WORKSPACE_PATH" ]; then
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         cd "$MAIN_REPO_DIR"
-        git worktree remove "$WORKSPACE_PATH" --force || true
+        # Use absolute path for worktree removal
+        git worktree remove "$(realpath "$WORKSPACE_PATH")" --force || true
         cd ..
     else
         exit 1
@@ -351,6 +352,15 @@ if [ "$USE_EXISTING" = true ]; then
 else
     # Create new branch from base branch
     echo -e "${GREEN}Creating new branch: $BRANCH_NAME from origin/$BASE_BRANCH${NC}"
+    
+    # Check if local branch already exists
+    if git show-ref --verify --quiet "refs/heads/$BRANCH_NAME"; then
+        echo -e "${YELLOW}Local branch '$BRANCH_NAME' already exists${NC}"
+        # Delete the local branch first
+        git branch -D "$BRANCH_NAME"
+        echo -e "${GREEN}Deleted existing local branch and creating new one${NC}"
+    fi
+    
     git worktree add "$WORKSPACE_PATH" -b "$BRANCH_NAME" "origin/$BASE_BRANCH"
 fi
 
@@ -367,9 +377,21 @@ cd "$AGENT_NAME"
 # Install Python dependencies with poetry
 if command -v poetry &> /dev/null; then
     echo -e "${GREEN}Installing Python dependencies with poetry...${NC}"
-    poetry install
+    if poetry install --no-interaction; then
+        echo -e "${GREEN}Poetry dependencies installed successfully${NC}"
+        
+        # Install development dependencies if pyproject.toml has them
+        if grep -q "\[tool.poetry.group.dev\]" pyproject.toml 2>/dev/null || grep -q "\[tool.poetry.dev-dependencies\]" pyproject.toml 2>/dev/null; then
+            echo -e "${GREEN}Installing development dependencies...${NC}"
+            poetry install --with dev --no-interaction || poetry install --dev --no-interaction
+        fi
+    else
+        echo -e "${YELLOW}Warning: Poetry installation failed. You may need to run 'poetry install' manually.${NC}"
+        echo -e "${YELLOW}Common fixes: poetry env use python3, poetry install --no-dev${NC}"
+    fi
 else
     echo -e "${YELLOW}Warning: poetry not found. Skipping Python dependency installation.${NC}"
+    echo -e "${YELLOW}To install poetry, run: curl -sSL https://install.python-poetry.org | python3 -${NC}"
 fi
 
 # Install Node dependencies and build webpack
@@ -398,6 +420,12 @@ echo ""
 echo "Context file: .agent-context.md"
 echo ""
 
+# Check if poetry is installed and activate environment
+if command -v poetry &> /dev/null; then
+    echo -e "\033[0;32mActivating poetry environment...\033[0m"
+    eval "$(poetry env info --path)/bin/activate" 2>/dev/null || poetry shell
+fi
+
 # Check if npm run dev is needed
 if [ -f "package.json" ] && ! [ -f "webpack-stats.json" ]; then
     echo -e "\033[1;33mWarning: webpack-stats.json not found!\033[0m"
@@ -413,7 +441,7 @@ fi
 
 echo "Useful commands:"
 echo "  poetry shell            - Activate Python virtual environment"
-echo "  python manage.py runserver - Start Django development server"
+echo "  poetry run python manage.py runserver - Start Django dev server"
 echo "  npm run dev             - Start webpack dev server (run in separate terminal)"
 echo "  npm run build           - Build webpack assets for production"
 echo ""
@@ -422,7 +450,7 @@ echo "  git add -A              - Stage all changes"
 echo "  git commit -m 'msg'     - Commit changes"
 echo "  git push -u origin HEAD - Push to remote"
 echo ""
-echo "  pytest tests/           - Run Python tests"
+echo "  poetry run pytest tests/ - Run Python tests"
 echo "  npm test                - Run JavaScript tests"
 echo ""
 echo "Starting Claude Code..."

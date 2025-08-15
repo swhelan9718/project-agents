@@ -12,7 +12,11 @@
       "Bash(git worktree:*)",
       "Bash(ls:*)",
       "Bash(./setup-agent.sh:*)",
-      "Bash(bash:*)"
+      "Bash(bash:*)",
+      "Bash(rm:*)",
+      "Bash(cat:*)",
+      "Bash(cp:*)",
+      "Bash(poetry install:*)"
     ],
     "deny": []
   }
