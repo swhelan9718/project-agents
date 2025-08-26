@@ -4,14 +4,30 @@ This directory contains the setup for multi-agent development on the GlobalViz p
 
 ## Quick Start
 
-1. **Automated Setup** - Create a new agent workspace:
+1. **Automated Setup** - Create a new agent workspace with tmux session:
    ```bash
    ./setup-agent.sh agent1 feature new-dashboard-widget
    ./setup-agent.sh agent2 fix login-error --issue 456
    ./setup-agent.sh agent3 test improve-coverage
    ```
+   
+   This automatically:
+   - Creates a Git worktree for the agent
+   - Sets up Python dependencies with Poetry
+   - Installs Node packages and builds webpack
+   - **Creates a tmux session with `npm run dev` running**
 
-2. **Start Working** - Launch Claude Code in the agent workspace:
+2. **Attach to Tmux Session** - Access your development environment:
+   ```bash
+   # Attach to the automatically created tmux session
+   tmux attach -t agent1
+   
+   # The session has:
+   # - Top pane (25%): npm run dev (already running)
+   # - Bottom pane (75%): Ready for your work
+   ```
+
+3. **Start Working** - Launch Claude Code in the agent workspace:
    ```bash
    cd agent1
    ./start-agent.sh
@@ -105,9 +121,40 @@ cd globalviz && git worktree remove ../agent1
    git worktree remove ../agent-issue-123
    ```
 
+## Tmux Session Features
+
+The setup script automatically creates tmux sessions for each agent:
+
+- **Auto-named sessions** - Session name matches the agent folder (e.g., `agent1`, `fix_stats_job`)
+- **Pre-configured layout** - Split window with npm (25% top) and workspace (75% bottom)
+- **npm auto-start** - `npm run dev` starts automatically in the top pane
+- **Detached sessions** - Runs in background, attach when ready
+- **Persistent** - Survives terminal disconnections
+
+### Tmux Quick Commands
+
+```bash
+# List all sessions
+tmux ls
+
+# Attach to agent session
+tmux attach -t agent1
+
+# Detach from session
+# Press: Ctrl+B, then D
+
+# Switch panes
+# Press: Ctrl+B, then arrow keys
+
+# Kill session
+tmux kill-session -t agent1
+```
+
 ## Tips
 
 - Use `--template` flag with setup script to use predefined templates
 - Run multiple agents in different terminal windows/tabs
 - Check agent progress with `git status` in each worktree
 - Use integration worktree to test combined changes
+- Tmux sessions persist even if you close your terminal
+- Each agent gets its own isolated tmux session with webpack running

@@ -148,6 +148,61 @@ Always create `.agent-context.md` files with:
 - Dedicate agents specifically for test improvements
 - Always verify no regressions before merging
 
+## Tmux Session Management (NEW)
+
+The `setup-agent.sh` script now automatically creates a tmux session for each agent workspace with the following configuration:
+
+### Automatic Tmux Setup
+
+When you run the setup script, it will:
+
+1. **Create a named tmux session** - Using the agent name (hyphens converted to underscores)
+2. **Split the window** - 25% top pane for `npm run dev`, 75% bottom pane for work
+3. **Start npm automatically** - The top pane runs `npm run dev` immediately
+4. **Focus the work pane** - Bottom pane is selected and ready for development
+5. **Detached by default** - Session runs in background, attach when ready
+
+### Tmux Session Names
+
+The session name matches your agent folder name with adjustments for tmux compatibility:
+
+- `integration_tests_port` → tmux session: `integration_tests_port`
+- `fix-stats-job` → tmux session: `fix_stats_job`
+- `agent-auth-feature` → tmux session: `agent_auth_feature`
+
+### Working with Tmux Sessions
+
+```bash
+# Attach to your agent's tmux session
+tmux attach -t integration_tests_port
+
+# List all tmux sessions
+tmux ls
+
+# Detach from current session
+# Press: Ctrl+B, then D
+
+# Switch between panes in tmux
+# Press: Ctrl+B, then arrow keys
+
+# Kill a tmux session (if needed)
+tmux kill-session -t integration_tests_port
+```
+
+### Tmux Layout
+
+Each session has:
+- **Top pane (25%)**: Running `npm run dev` for webpack hot-reloading
+- **Bottom pane (75%)**: Your main workspace for development
+
+### Benefits of Tmux Integration
+
+1. **No manual npm setup** - Webpack dev server starts automatically
+2. **Persistent sessions** - Survives terminal disconnections
+3. **Organized workspace** - Each agent has its own named session
+4. **Easy switching** - Jump between agents with tmux commands
+5. **Background operation** - Sessions run without keeping terminals open
+
 ## Common Commands
 
 ### List All Worktrees

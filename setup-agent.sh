@@ -458,6 +458,40 @@ claude-code
 EOF
 chmod +x "$AGENT_NAME/start-agent.sh"
 
+# Create tmux session if tmux is available
+if command -v tmux &> /dev/null; then
+    # Create tmux session name from agent name (replace hyphens with underscores for tmux compatibility)
+    TMUX_SESSION_NAME=$(echo "$AGENT_NAME" | tr '-' '_')
+    
+    # Check if session already exists
+    if tmux has-session -t "$TMUX_SESSION_NAME" 2>/dev/null; then
+        echo -e "${YELLOW}Tmux session '$TMUX_SESSION_NAME' already exists. Killing it...${NC}"
+        tmux kill-session -t "$TMUX_SESSION_NAME"
+    fi
+    
+    echo -e "${GREEN}Creating tmux session '$TMUX_SESSION_NAME'...${NC}"
+    
+    # Create new tmux session in the worktree directory without attaching
+    tmux new-session -d -s "$TMUX_SESSION_NAME" -c "$WORKSPACE_PATH"
+    
+    # Split window horizontally (25% top for npm, 75% bottom for work)
+    tmux split-window -t "$TMUX_SESSION_NAME:0" -v -p 25
+    
+    # Start npm run dev in top pane (pane 0)
+    if [ -f "$WORKSPACE_PATH/package.json" ]; then
+        tmux send-keys -t "$TMUX_SESSION_NAME:0.0" "npm run dev" Enter
+    fi
+    
+    # Select bottom pane (pane 1) for main work
+    tmux select-pane -t "$TMUX_SESSION_NAME:0.1"
+    
+    # Make the bottom pane active
+    tmux select-window -t "$TMUX_SESSION_NAME:0"
+    
+    echo -e "${GREEN}✓ Tmux session '$TMUX_SESSION_NAME' created and ready${NC}"
+    echo ""
+fi
+
 # Summary
 echo ""
 echo -e "${GREEN}✓ Agent workspace created successfully!${NC}"
@@ -466,6 +500,15 @@ echo "Workspace: $WORKSPACE_PATH"
 echo "Branch: $BRANCH_NAME"
 echo "Context: $WORKSPACE_PATH/.agent-context.md"
 echo ""
+if command -v tmux &> /dev/null && tmux has-session -t "$TMUX_SESSION_NAME" 2>/dev/null; then
+    echo -e "${GREEN}Tmux session ready:${NC}"
+    echo "  tmux attach -t $TMUX_SESSION_NAME"
+    echo ""
+    echo "The session has:"
+    echo "  - Top pane (25%): npm run dev (running)"
+    echo "  - Bottom pane (75%): Ready for your work"
+    echo ""
+fi
 echo "To start working:"
 echo "  cd $AGENT_NAME"
 echo "  ./start-agent.sh"
@@ -474,6 +517,6 @@ echo "Or manually:"
 echo "  cd $AGENT_NAME"
 echo "  claude-code"
 echo ""
-if [ -f "$AGENT_NAME/package.json" ]; then
+if [ -f "$AGENT_NAME/package.json" ] && ! command -v tmux &> /dev/null; then
     echo -e "${YELLOW}Remember: Run 'npm run dev' in a separate terminal for webpack hot-reloading${NC}"
 fi
