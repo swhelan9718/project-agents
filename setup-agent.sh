@@ -460,6 +460,9 @@ chmod +x "$AGENT_NAME/start-agent.sh"
 
 # Create tmux session if tmux is available
 if command -v tmux &> /dev/null; then
+    # Get the absolute path of the workspace
+    WORKSPACE_ABS_PATH=$(cd "$AGENT_NAME" && pwd)
+    
     # Create tmux session name from agent name (replace hyphens with underscores for tmux compatibility)
     TMUX_SESSION_NAME=$(echo "$AGENT_NAME" | tr '-' '_')
     
@@ -471,22 +474,51 @@ if command -v tmux &> /dev/null; then
     
     echo -e "${GREEN}Creating tmux session '$TMUX_SESSION_NAME'...${NC}"
     
-    # Create new tmux session in the worktree directory without attaching
-    tmux new-session -d -s "$TMUX_SESSION_NAME" -c "$WORKSPACE_PATH"
-    
-    # Split window horizontally (25% top for npm, 75% bottom for work)
-    tmux split-window -t "$TMUX_SESSION_NAME:0" -v -p 25
-    
-    # Start npm run dev in top pane (pane 0)
-    if [ -f "$WORKSPACE_PATH/package.json" ]; then
-        tmux send-keys -t "$TMUX_SESSION_NAME:0.0" "npm run dev" Enter
+    # Source the user's tmux.conf first
+    if [ -f "$HOME/.tmux.conf" ]; then
+        tmux source-file "$HOME/.tmux.conf"
     fi
     
-    # Select bottom pane (pane 1) for main work
-    tmux select-pane -t "$TMUX_SESSION_NAME:0.1"
+    # Create new tmux session in the worktree directory without attaching
+    # Start the session directly in the worktree path
+    tmux new-session -d -s "$TMUX_SESSION_NAME" -c "$WORKSPACE_ABS_PATH"
+    
+    # Create horizontal split (top 25%, bottom 75%)
+    # Note: -v splits vertically, creating horizontal panes
+    tmux split-window -t "$TMUX_SESSION_NAME:0" -v -p 75 -c "$WORKSPACE_ABS_PATH"
+    
+    # Now we have two panes: 0 (top) and 1 (bottom)
+    # Split the top pane vertically (creating left and right in the top section)
+    tmux split-window -t "$TMUX_SESSION_NAME:0.0" -h -c "$WORKSPACE_ABS_PATH"
+    
+    # Layout should now be:
+    # Pane 0: Top-left
+    # Pane 1: Top-right  
+    # Pane 2: Bottom (main work area)
+    
+    # Start npm run dev in top-left pane (pane 0) if package.json exists
+    if [ -f "$WORKSPACE_ABS_PATH/package.json" ]; then
+        tmux send-keys -t "$TMUX_SESSION_NAME:0.0" "npm run dev" Enter
+    else
+        # If no package.json, just show git status for info
+        tmux send-keys -t "$TMUX_SESSION_NAME:0.0" "git status" Enter
+    fi
+    
+    # In top-right pane (pane 1), show the context file
+    tmux send-keys -t "$TMUX_SESSION_NAME:0.1" "cat .agent-context.md" Enter
+    
+    # Select bottom pane (pane 2) for main work and clear it
+    tmux select-pane -t "$TMUX_SESSION_NAME:0.2"
+    tmux send-keys -t "$TMUX_SESSION_NAME:0.2" "clear" Enter
+    
+    # Ensure all panes are in the worktree directory
+    tmux send-keys -t "$TMUX_SESSION_NAME:0.0" "cd $WORKSPACE_ABS_PATH" Enter
+    tmux send-keys -t "$TMUX_SESSION_NAME:0.1" "cd $WORKSPACE_ABS_PATH" Enter
+    tmux send-keys -t "$TMUX_SESSION_NAME:0.2" "cd $WORKSPACE_ABS_PATH" Enter
     
     # Make the bottom pane active
     tmux select-window -t "$TMUX_SESSION_NAME:0"
+    tmux select-pane -t "$TMUX_SESSION_NAME:0.2"
     
     echo -e "${GREEN}✓ Tmux session '$TMUX_SESSION_NAME' created and ready${NC}"
     echo ""
@@ -505,8 +537,16 @@ if command -v tmux &> /dev/null && tmux has-session -t "$TMUX_SESSION_NAME" 2>/d
     echo "  tmux attach -t $TMUX_SESSION_NAME"
     echo ""
     echo "The session has:"
-    echo "  - Top pane (25%): npm run dev (running)"
+    echo "  - Top panes (25%):"
+    echo "    - Left: npm run dev (running) or git status"
+    echo "    - Right: Agent context file displayed"
     echo "  - Bottom pane (75%): Ready for your work"
+    echo ""
+    echo "Tmux navigation (with ctrl+a prefix):"
+    echo "  - ctrl+a then arrow keys: Navigate between panes"
+    echo "  - ctrl+a then d: Detach from session"
+    echo "  - ctrl+a then c: Create new window"
+    echo "  - ctrl+a then n/p: Next/previous window"
     echo ""
 fi
 echo "To start working:"
