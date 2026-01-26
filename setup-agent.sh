@@ -332,6 +332,20 @@ cd "$MAIN_REPO_DIR"
 # Fetch latest changes
 git fetch origin
 
+# Pull latest changes on the current branch (generic - works with any branch)
+CURRENT_BRANCH=$(git branch --show-current)
+if [ -n "$CURRENT_BRANCH" ]; then
+    echo -e "${GREEN}Pulling latest changes on $CURRENT_BRANCH...${NC}"
+    if git pull origin "$CURRENT_BRANCH"; then
+        echo -e "${GREEN}Successfully pulled latest from $CURRENT_BRANCH${NC}"
+    else
+        echo -e "${YELLOW}Warning: Could not pull $CURRENT_BRANCH. Continuing with current state.${NC}"
+        echo -e "${YELLOW}You may have uncommitted changes or merge conflicts.${NC}"
+    fi
+else
+    echo -e "${YELLOW}Warning: Not on a branch (detached HEAD). Skipping pull.${NC}"
+fi
+
 if [ "$USE_EXISTING" = true ]; then
     # Check if branch exists on origin
     if git ls-remote --heads origin "$BRANCH_NAME" | grep -q "$BRANCH_NAME"; then
