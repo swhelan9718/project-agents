@@ -203,6 +203,58 @@ Each session has:
 4. **Easy switching** - Jump between agents with tmux commands
 5. **Background operation** - Sessions run without keeping terminals open
 
+## Agent Teardown
+
+The `teardown-agent.sh` script provides automated cleanup of agent workspaces, removing both the git worktree and the associated tmux session in one command.
+
+### Teardown Commands
+
+```bash
+# See all agents and their status (uncommitted changes, tmux sessions)
+./teardown-agent.sh --list
+
+# Remove a clean agent
+./teardown-agent.sh agent1
+
+# Force remove (even with uncommitted changes)
+./teardown-agent.sh agent1 --force
+
+# Preview actions without executing
+./teardown-agent.sh agent1 --dry-run
+
+# Show help
+./teardown-agent.sh --help
+```
+
+### What Teardown Does
+
+1. **Checks for uncommitted changes** - Shows modified/untracked files
+2. **Removes git worktree** - Runs `git worktree remove` from globalviz
+3. **Kills tmux session** - Terminates the matching tmux session
+4. **Reports results** - Shows success/failure for each step
+
+### Naming Convention
+
+The script handles the same naming convention as `setup-agent.sh`:
+- Agent folder: `fix-stats-job` or `feature_dashboard`
+- Tmux session: `fix_stats_job` or `feature_dashboard` (hyphens become underscores)
+
+### Safety Features
+
+- **Uncommitted change detection** - Won't delete work without `--force`
+- **Dry run mode** - See what would happen before executing
+- **Prevents globalviz deletion** - Can't accidentally remove main repo
+- **Graceful handling** - Continues if tmux session already gone
+
+### Verification
+
+After teardown, verify with:
+```bash
+git worktree list    # Should not show removed agent
+tmux ls              # Should not show removed session
+ls -la               # Should not show agent directory
+```
+
 ## Common Commands
 
 ### List All Worktrees
@@ -214,8 +266,25 @@ git worktree list
 
 ### Remove a Worktree
 
+Using the teardown script (recommended):
+```bash
+# List all agents with status
+./teardown-agent.sh --list
+
+# Remove agent (worktree + tmux session)
+./teardown-agent.sh agent1
+
+# Force remove (ignores uncommitted changes)
+./teardown-agent.sh agent1 --force
+
+# Preview what would happen
+./teardown-agent.sh agent1 --dry-run
+```
+
+Manual removal:
 ```bash
 git worktree remove ../agent1
+tmux kill-session -t agent1
 ```
 
 ### Check Agent Status
@@ -245,6 +314,10 @@ git merge origin/test/improve-coverage
 If you get an error about a worktree already existing:
 
 ```bash
+# Using teardown script (recommended)
+./teardown-agent.sh agent1 --force
+
+# Or manually
 git worktree remove ../agent1 --force
 git worktree add ../agent1 -b new-branch
 ```

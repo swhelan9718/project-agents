@@ -51,7 +51,8 @@ project-agents/
 │   ├── feature-development-template.md
 │   ├── testing-improvement-template.md
 │   └── debugging-investigation-template.md
-├── setup-agent.sh          # Automation script
+├── setup-agent.sh          # Create agent workspace
+├── teardown-agent.sh       # Remove agent workspace
 └── [Documentation files]
 ```
 
@@ -74,12 +75,21 @@ project-agents/
 
 ### List All Agents
 ```bash
+./teardown-agent.sh --list
+# Or manually:
 cd globalviz && git worktree list
 ```
 
 ### Remove an Agent
 ```bash
-cd globalviz && git worktree remove ../agent1
+# Automated teardown (removes worktree + kills tmux session)
+./teardown-agent.sh agent1
+
+# Force remove (even with uncommitted changes)
+./teardown-agent.sh agent1 --force
+
+# Preview what would be removed
+./teardown-agent.sh agent1 --dry-run
 ```
 
 ## Best Practices
@@ -117,8 +127,8 @@ cd globalviz && git worktree remove ../agent1
 5. Create pull request and clean up:
    ```bash
    gh pr create
-   cd ../globalviz
-   git worktree remove ../agent-issue-123
+   cd ..
+   ./teardown-agent.sh agent-issue-123
    ```
 
 ## Tmux Session Features
@@ -149,6 +159,45 @@ tmux attach -t agent1
 # Kill session
 tmux kill-session -t agent1
 ```
+
+## Teardown Script
+
+The `teardown-agent.sh` script automates cleanup of agent workspaces:
+
+### Features
+- **Removes git worktree** - Cleans up the worktree from the repository
+- **Kills tmux session** - Terminates the associated tmux session
+- **Safety checks** - Warns about uncommitted changes before removal
+- **Dry run mode** - Preview actions without executing
+
+### Commands
+```bash
+# List all agents and their status
+./teardown-agent.sh --list
+
+# Remove an agent (worktree must be clean)
+./teardown-agent.sh agent1
+
+# Force remove (even with uncommitted changes)
+./teardown-agent.sh agent1 --force
+
+# Preview what would be removed
+./teardown-agent.sh agent1 --dry-run
+
+# Show help
+./teardown-agent.sh --help
+```
+
+### What Gets Removed
+1. **Git worktree** - The agent directory and its git tracking
+2. **Tmux session** - The associated tmux session (uses underscore naming)
+3. **All local changes** - When using `--force`, uncommitted work is lost
+
+### Safety Features
+- Detects uncommitted changes and requires `--force` to proceed
+- Shows detailed status before any action
+- Prevents accidental removal of the main `globalviz` directory
+- Dry run mode lets you preview before executing
 
 ## Tips
 
